@@ -1,123 +1,126 @@
 # Placement Drive Manager
 
-A full-stack web application for managing campus placement drives. It provides a centralized dashboard to create, view, search, and filter placement opportunities, with data stored persistently in PostgreSQL.
+A full-stack dashboard for creating, viewing, searching, and filtering campus recruitment drives. Placement drive data is stored in PostgreSQL through Prisma ORM.
 
 ## Features
 
-* **Dashboard:** View placement drives and summary statistics.
-* **Create Placement Drives:** Add company details, job roles, drive dates, eligible branches, minimum CGPA, and job type.
-* **Search and Filtering:** Find drives using the available search and filter controls.
-* **Form Validation:** Validate required fields, date values, CGPA, and job type.
-* **Persistent Storage:** Store placement drive records in PostgreSQL using Prisma ORM.
-* **REST API:** Retrieve and create placement drives through API endpoints.
-* **Responsive Interface:** Use the dashboard on desktop and mobile screens.
-* **Error and Loading States:** Display appropriate feedback while data loads or when requests fail.
+- Dashboard statistics calculated from records returned by the API.
+- Create and list placement drives with eligibility and job details.
+- Search company names, job roles, and eligible branches.
+- Filter by job type and upcoming or past drive dates.
+- Earliest-first drive date sorting.
+- Responsive desktop table and mobile cards.
+- Form validation and loading, empty, error, and success states.
 
-## Tech Stack
+## Technology stack
 
-* **Frontend:** Next.js, React, JavaScript
-* **Styling:** Tailwind CSS
-* **Backend:** Next.js App Router API Routes
-* **Database:** PostgreSQL
-* **ORM:** Prisma
-* **Version Control:** Git and GitHub
+- Next.js 16 App Router and Route Handlers
+- React and JavaScript
+- Tailwind CSS v4
+- PostgreSQL
+- Prisma ORM v6
 
 ## Prerequisites
 
-Install the following before running the project:
+- Node.js and npm versions supported by the installed Next.js version
+- PostgreSQL
+- Git
 
-* Node.js and npm
-* PostgreSQL
-* Git
+## Setup
 
-## Getting Started
-
-### 1. Clone the repository
+### 1. Clone the repository and install dependencies
 
 ```bash
 git clone https://github.com/pragat1/placement-drive-manager.git
 cd placement-drive-manager
-```
-
-### 2. Install dependencies
-
-```bash
 npm install
 ```
 
-### 3. Configure environment variables
+### 2. Configure the database connection
 
-Create a local `.env` file by copying the example file.
-
-In PowerShell:
+Copy the placeholder file to a local environment file. In PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Open `.env` and configure your PostgreSQL connection:
+Set `DATABASE_URL` in `.env` to your local PostgreSQL connection string:
 
 ```env
-DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/placement_manager?schema=public"
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/placement_manager?schema=public"
 ```
 
-Replace `YOUR_PASSWORD` with your PostgreSQL password.
+Replace `USER` and `PASSWORD` with your PostgreSQL credentials. URL-encode reserved characters in credentials as required. Keep `.env` private and uncommitted; `.env.example` contains placeholders only.
 
-**Important:** If your password contains URL-reserved characters, encode them appropriately in the connection URL. Never commit your actual `.env` file or expose database credentials.
+### 3. Create the PostgreSQL database
 
-### 4. Create the database
-
-Create a PostgreSQL database named `placement_manager` if it does not already exist.
-
-You can use PostgreSQL's command-line client:
+Create a database named `placement_manager` if it does not already exist. For example, connect to PostgreSQL as an account permitted to create databases and run:
 
 ```sql
 CREATE DATABASE placement_manager;
 ```
 
-Run this SQL command while connected to PostgreSQL using an account with permission to create databases. Skip this step if the database already exists.
+Skip this step if the database already exists.
 
-### 5. Apply database migrations
+### 4. Apply the Prisma migration
 
-Run:
+From the project directory, run:
 
 ```bash
 npx prisma migrate dev
 ```
 
-This applies the project's existing migrations to the configured database.
+This applies the existing migration in `prisma/migrations/` to the database configured by `DATABASE_URL`.
 
-If you intentionally create a new migration while developing the schema, use:
-
-```bash
-npx prisma migrate dev --name describe_your_change
-```
-
-### 6. Start the development server
+### 5. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000 in your browser.
+Open [http://localhost:3000](http://localhost:3000).
 
-## API Documentation
+## REST API
 
-The application exposes the following endpoint:
+The API is implemented in `app/api/drives/route.js`. Both handlers use Prisma Client from `lib/prisma.js`; the Prisma datasource is PostgreSQL. API dates are serialized as ISO 8601 strings. The examples below are illustrative and are not inserted automatically.
 
 ### `GET /api/drives`
 
-Retrieves placement drives from the database, ordered by drive date.
+Returns all placement drives ordered by `driveDate`, earliest first.
 
-**Successful response:** `200 OK`
+**Success — `200 OK`**
 
-Returns a JSON array of placement drive records.
+The response is a JSON array. It is `[]` when no drives exist.
+
+```json
+[
+  {
+    "id": "clxxxxxxxxxxxxxxxxxxxxxxxx",
+    "companyName": "Example Technologies",
+    "role": "Software Engineer",
+    "driveDate": "2026-11-15T00:00:00.000Z",
+    "eligibleBranch": "CSE",
+    "minCGPA": 7.5,
+    "jobType": "Full-Time",
+    "createdAt": "2026-10-22T09:25:22.865Z",
+    "updatedAt": "2026-10-22T09:25:22.865Z"
+  }
+]
+```
+
+The example `id` and timestamps represent values generated by Prisma/database operations.
+
+**Failure — `500 Internal Server Error`**
+
+```json
+{ "error": "Failed to fetch placement drives." }
+```
 
 ### `POST /api/drives`
 
-Creates a new placement drive.
+Creates a drive in PostgreSQL and returns the created record.
 
-**Example request body:**
+**Example request — `Content-Type: application/json`**
 
 ```json
 {
@@ -130,70 +133,131 @@ Creates a new placement drive.
 }
 ```
 
-**Required fields:**
+Required fields:
 
-* `companyName`
-* `role`
-* `driveDate`
-* `eligibleBranch`
+- `companyName`: non-empty string
+- `role`: non-empty string
+- `driveDate`: non-empty string parseable as a JavaScript date
+- `eligibleBranch`: non-empty string
 
-**Optional fields:**
+Optional fields:
 
-* `minCGPA`: Must be a number between 0 and 10.
-* `jobType`: Must be `Internship`, `Full-Time`, or `Other`.
+- `minCGPA`: JSON number from 0 to 10 inclusive. Omit, `null`, or `""` to leave it unspecified. Numeric strings are not accepted.
+- `jobType`: `Internship`, `Full-Time`, or `Other`. Omit, `null`, or `""` to leave it unspecified.
 
-**Response codes:**
+**Success — `201 Created`**
 
-| Status                      | Meaning                                  |
-| --------------------------- | ---------------------------------------- |
-| `201 Created`               | Placement drive created successfully     |
-| `400 Bad Request`           | Invalid input or missing required fields |
-| `500 Internal Server Error` | An unexpected server-side error occurred |
+Returns the created record with generated `id` and timestamps. Dates are serialized as ISO 8601 strings.
 
-The API persists successfully created records in PostgreSQL.
+```json
+{
+  "id": "clxxxxxxxxxxxxxxxxxxxxxxxx",
+  "companyName": "Example Technologies",
+  "role": "Software Engineer",
+  "driveDate": "2026-11-15T00:00:00.000Z",
+  "eligibleBranch": "CSE",
+  "minCGPA": 7.5,
+  "jobType": "Full-Time",
+  "createdAt": "2026-10-22T09:25:22.865Z",
+  "updatedAt": "2026-10-22T09:25:22.865Z"
+}
+```
 
-## Database Model
+**Validation failures — `400 Bad Request`**
 
-The `PlacementDrive` model contains:
+Every validation error returns a JSON object with an `error` string. Examples:
 
-| Field            | Description                       |
-| ---------------- | --------------------------------- |
-| `id`             | Unique identifier                 |
-| `companyName`    | Hiring company                    |
-| `role`           | Position being offered            |
-| `driveDate`      | Scheduled placement drive date    |
-| `eligibleBranch` | Eligible academic branch          |
-| `minCGPA`        | Optional minimum CGPA requirement |
-| `jobType`        | Optional employment type          |
-| `createdAt`      | Record creation timestamp         |
-| `updatedAt`      | Last update timestamp             |
+```json
+{ "error": "Request body must contain valid JSON." }
+```
 
-## Development Commands
+```json
+{ "error": "companyName, role, driveDate, and eligibleBranch are required." }
+```
+
+```json
+{ "error": "driveDate must be a valid date." }
+```
+
+```json
+{ "error": "minCGPA must be a number between 0 and 10." }
+```
+
+```json
+{ "error": "jobType must be Internship, Full-Time, or Other." }
+```
+
+**Database failure — `500 Internal Server Error`**
+
+```json
+{ "error": "Failed to create placement drive." }
+```
+
+### Status code summary
+
+| Status | Meaning |
+| --- | --- |
+| `200 OK` | `GET` returned the drive list. |
+| `201 Created` | `POST` created a drive. |
+| `400 Bad Request` | `POST` received malformed JSON or invalid/missing fields. |
+| `500 Internal Server Error` | A database read or write failed. |
+
+### Local API examples (PowerShell)
+
+With the application running, retrieve the list:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://localhost:3000/api/drives
+```
+
+Create a record (this writes persistently to the configured database):
+
+```powershell
+$body = @{
+  companyName = "Example Technologies"
+  role = "Software Engineer"
+  driveDate = "2026-11-15"
+  eligibleBranch = "CSE"
+  minCGPA = 7.5
+  jobType = "Full-Time"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/drives `
+  -ContentType "application/json" -Body $body
+```
+
+## Database model
+
+The Prisma `PlacementDrive` model contains:
+
+| Field | Description |
+| --- | --- |
+| `id` | Unique identifier generated by Prisma. |
+| `companyName` | Hiring company. |
+| `role` | Position being offered. |
+| `driveDate` | Scheduled placement drive date. |
+| `eligibleBranch` | Eligible academic branch. |
+| `minCGPA` | Optional minimum CGPA. |
+| `jobType` | Optional employment type. |
+| `createdAt` | Record creation timestamp. |
+| `updatedAt` | Last update timestamp. |
+
+## Development and validation commands
 
 ```bash
-# Start the development server
 npm run dev
-
-# Run lint checks
 npm run lint
-
-# Create a production build
 npm run build
-
-# Validate the Prisma schema
 npx prisma validate
-
-# Generate the Prisma Client
 npx prisma generate
 ```
 
-## Security Notes
+## Security notes
 
-* Keep database credentials in `.env`.
-* Use `.env.example` to document the required environment variable without including real credentials.
-* Validate incoming API data before inserting records into the database.
-* Do not commit secrets, local environment files, or database credentials.
+- Keep database credentials in `.env`; never commit or share that file.
+- `.env.example` is a placeholder template, not a credentials file.
+- The browser communicates with the API; it does not connect directly to PostgreSQL.
 
 ## Repository
 
-GitHub: https://github.com/pragat1/placement-drive-manager
+[github.com/pragat1/placement-drive-manager](https://github.com/pragat1/placement-drive-manager)
